@@ -65,7 +65,7 @@ Temel kurallar:
 - [ ] Node.js'in LTS sürümünü kur (`node -v` ile kontrol et)
 - [ ] Docker Desktop'ı kur ve çalıştır (`docker -v`)
 - [ ] Git'i kur, adını ve e-postanı ayarla
-- [ ] VS Code eklentileri: ESLint, Prettier, Prisma, Docker
+- [ ] VS Code eklentileri: Oxc (oxlint), Prettier, Prisma, Docker
 - [ ] API denemek için Postman, Insomnia ya da Bruno'dan birini kur
 - [ ] Veritabanını görmek için DBeaver ya da TablePlus kur
 
@@ -189,7 +189,7 @@ açılırken anlaşılır bir hata veriyor.
 
 ### İş 1.4 — Kod kalitesi
 
-- [ ] Nest'in getirdiği ESLint ve Prettier ayarlarını koru
+- [ ] Nest'in getirdiği oxlint ve Prettier ayarlarını koru
 - [ ] `package.json` içine `"lint"` ve `"format"` script'lerinin çalıştığını
       kontrol et
 - [ ] VS Code'da "kaydederken biçimlendir" ayarını aç
@@ -255,15 +255,18 @@ npx prisma init --output ../src/generated/prisma
 
 ```prisma
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"   // Nest projesi varsayılan olarak CommonJS kullanır
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
 }
 ```
+
+Not: Güncel Nest projeleri ESM olarak gelir (`package.json` içinde `"type": "module"`),
+bu yüzden `moduleFormat` ayarı gerekmez. Projen CommonJS ise generator'a
+`moduleFormat = "cjs"` satırını ekle.
 
 - [ ] `prisma.config.ts` dosyasının `.env`'i okuduğundan emin ol:
 
@@ -287,7 +290,7 @@ export default defineConfig({
 ```ts
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '../generated/prisma/client.js'; // ESM'de göreli importlar .js ile biter
 
 @Injectable()
 export class PrismaService
@@ -1127,7 +1130,7 @@ etiketlerdir.
 Test yazmayı sona bırakma. Her aşamada o aşamanın testlerini de yaz; bu
 aşama eksikleri tamamlamak ve otomasyonu kurmak içindir.
 
-### İş 10.1 — Birim testleri (Jest)
+### İş 10.1 — Birim testleri (Vitest)
 
 Öncelik sırası:
 
