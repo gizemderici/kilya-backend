@@ -655,14 +655,15 @@ parolalar loglarda yok.
 
 ### İş 3.5 — İstek sınırı
 
-```bash
-npm i @nestjs/throttler
-```
+`@nestjs/throttler` henüz NestJS 12'yi desteklemediği için projede kendi
+guard'ımız var: `src/common/rate-limit/`.
 
-- [ ] Genel sınır: dakikada 100 istek
-- [ ] Auth uç noktaları için daha sıkı sınır: dakikada 5–10 istek (`@Throttle`)
+- [x] Genel sınır: IP ve uç nokta başına dakikada 100 istek (`RateLimitGuard`)
+- [ ] Auth uç noktaları için daha sıkı sınır: dakikada 5–10 istek
+      (`@RateLimit({ limit: 10, ttlMs: 60_000 })`, Aşama 4'te)
 
-**Bitti sayılır:** Giriş uç noktasına art arda 11 istek atıldığında `429` dönüyor.
+**Bitti sayılır:** Sınırı aşan istekler `429` ve `Retry-After` başlığı alıyor.
+Giriş uç noktasına art arda 11 istek atıldığında `429` dönüyor (Aşama 4).
 
 ### İş 3.6 — Sağlık kontrolü
 
@@ -670,8 +671,9 @@ npm i @nestjs/throttler
 npm i @nestjs/terminus
 ```
 
-- [ ] `GET /api/v1/health` uç noktası yaz; veritabanı bağlantısını kontrol etsin
-      (`PrismaHealthIndicator`)
+- [x] `GET /api/v1/health` uç noktası yaz; veritabanı bağlantısını kontrol etsin
+      (`DatabaseHealthIndicator`; terminus'un hazır `PrismaHealthIndicator`'ı
+      hata mesajında veritabanı adresini gösterdiği için kendi göstergemiz var)
 
 **Bitti sayılır:** Docker açıkken `status: ok`, kapalıyken `503` dönüyor.
 
@@ -1312,10 +1314,10 @@ Tüm adresler `/api/v1` ile başlar. 🔓 = token gerekmez.
 
 | Aşama | Konu | Tahmini süre | Durum |
 |---|---|---|---|
-| 0 | Hazırlık | yarım gün | ☐ |
-| 1 | Proje iskeleti | 1 gün | ☐ |
-| 2 | Veritabanı | 1–2 gün | ☐ |
-| 3 | Ortak altyapı | 1–2 gün | ☐ |
+| 0 | Hazırlık | yarım gün | ✅ |
+| 1 | Proje iskeleti | 1 gün | ✅ |
+| 2 | Veritabanı | 1–2 gün | ✅ |
+| 3 | Ortak altyapı | 1–2 gün | ✅ (auth sınırı Aşama 4'te) |
 | 4 | Kimlik doğrulama | 1–1,5 hafta | ☐ |
 | 5 | Kullanıcı, profil, hedefler | 3–4 gün | ☐ |
 | 6 | Cihaz ve kalibrasyon | 3–4 gün | ☐ |
