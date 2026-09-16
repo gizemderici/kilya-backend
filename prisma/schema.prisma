@@ -1,0 +1,11 @@
+// Prisma şeması. Modeller ilgili aşamaya gelindikçe eklenir;
+// tam resim için docs/yol-haritasi.md İş 2.4'e bak.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
