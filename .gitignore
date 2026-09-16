@@ -22,3 +22,6 @@ Thumbs.db
 # Docker volumes
 pgdata/
 *.tsbuildinfo
+
+# Geliştirmede her açılışta yeniden üretilir (npm run start:dev)
+openapi.json
