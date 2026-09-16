@@ -6,6 +6,7 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.
 import { RateLimitGuard } from './common/rate-limit/index.js';
 import { validateEnv } from './config/env.js';
 import { loggerConfig } from './config/logger.config.js';
+import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
@@ -16,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
       useFactory: loggerConfig,
     }),
     PrismaModule,
+    HealthModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
