@@ -1,0 +1,24 @@
+# Node
+node_modules/
+dist/
+src/generated/
+coverage/
+*.log
+npm-debug.log*
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Docker volumes
+pgdata/
+*.tsbuildinfo
