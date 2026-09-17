@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import argon2 from 'argon2';
+import type { User } from '../generated/prisma/client.js';
 import type { UsersService } from '../users/users.service.js';
 import { AuthService } from './auth.service.js';
 import type { TokenService } from './token.service.js';
@@ -7,7 +8,7 @@ import { fakeUser } from './token.service.spec.js';
 
 function setup() {
   const users = {
-    findByEmail: vi.fn(async () => null),
+    findByEmail: vi.fn<() => Promise<User | null>>(async () => null),
     create: vi.fn(async (data) => fakeUser({ id: 'new-user', ...data })),
   };
   const tokens = {

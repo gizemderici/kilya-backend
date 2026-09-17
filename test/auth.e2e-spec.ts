@@ -90,4 +90,55 @@ describe('Auth (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('POST /auth/refresh', () => {
+    const register = async (name: string) => {
+      const res = await api()
+        .post('/api/v1/auth/register')
+        .send({ email: emailOf(name), password: 'Gizli-Parola-123' })
+        .expect(201);
+      return res.body as {
+        accessToken: string;
+        refreshToken: string;
+        user: { id: string };
+      };
+    };
+    const refresh = (refreshToken: string) =>
+      api().post('/api/v1/auth/refresh').send({ refreshToken });
+
+    it('geçerli token ile yeni çift verir, eskisi geçersiz olur', async () => {
+      const first = await register('refresh');
+
+      const second = await refresh(first.refreshToken).expect(200);
+      expect(second.body.refreshToken).not.toBe(first.refreshToken);
+      expect(second.body.user.id).toBe(first.user.id);
+
+      // Eski token artık kullanılamaz
+      await refresh(first.refreshToken).expect(401);
+    });
+
+    it('iptal edilmiş token yeniden kullanılınca diğer oturumlar da kapanır', async () => {
+      // Aynı kullanıcı iki cihazdan giriş yapmış gibi: iki refresh token
+      const phone = await register('calinti');
+      const tablet = await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: phone.refreshToken })
+        .expect(200);
+      // phone.refreshToken artık iptal; tablet.body.refreshToken geçerli.
+      // Saldırgan eski (iptal edilmiş) token'ı tekrar kullanıyor:
+      await refresh(phone.refreshToken).expect(401);
+
+      // Kullanıcının hâlâ geçerli olan tablet oturumu da kapatılmış olmalı
+      await refresh(tablet.body.refreshToken).expect(401);
+
+      const active = await prisma.refreshToken.count({
+        where: { userId: phone.user.id, revokedAt: null },
+      });
+      expect(active).toBe(0);
+    });
+
+    it('uydurma token 401', async () => {
+      await refresh('a'.repeat(43)).expect(401);
+    });
+  });
 });
