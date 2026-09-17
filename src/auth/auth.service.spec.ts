@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import argon2 from 'argon2';
 import type { User } from '../generated/prisma/client.js';
 import type { UsersService } from '../users/users.service.js';
@@ -17,6 +17,8 @@ function setup() {
       refreshToken: 'rt',
       user: { id: user.id, email: user.email, isAnonymous: user.isAnonymous },
     })),
+    rotate: vi.fn(),
+    revoke: vi.fn(async () => undefined),
   };
   const service = new AuthService(
     users as unknown as UsersService,
@@ -57,5 +59,55 @@ describe('AuthService', () => {
       ).rejects.toThrow(ConflictException);
       expect(users.create).not.toHaveBeenCalled();
     });
+  });
+
+  describe('login', () => {
+    const password = 'Gizli-Parola-123';
+    let passwordHash: string;
+    beforeAll(async () => {
+      passwordHash = await argon2.hash(password);
+    });
+
+    it('doğru parola ile token döner', async () => {
+      const { service, users, tokens } = setup();
+      users.findByEmail.mockResolvedValueOnce(fakeUser({ passwordHash }));
+
+      const res = await service.login({ email: 'a@b.com', password }, 'ua');
+
+      expect(tokens.issueTokens).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'user-1' }),
+        'ua',
+      );
+      expect(res.accessToken).toBe('at');
+    });
+
+    it('yanlış parola, kayıtsız e-posta ve parolasız (Google) hesap aynı hatayı verir', async () => {
+      const { service, users, tokens } = setup();
+      const attempt = () =>
+        service.login({ email: 'a@b.com', password: 'yanlis-parola' });
+
+      users.findByEmail.mockResolvedValueOnce(fakeUser({ passwordHash }));
+      const wrongPassword = await attempt().catch((e: Error) => e);
+
+      users.findByEmail.mockResolvedValueOnce(null);
+      const unknownEmail = await attempt().catch((e: Error) => e);
+
+      users.findByEmail.mockResolvedValueOnce(
+        fakeUser({ passwordHash: null, googleId: 'g-1' }),
+      );
+      const googleOnly = await attempt().catch((e: Error) => e);
+
+      for (const err of [wrongPassword, unknownEmail, googleOnly]) {
+        expect(err).toBeInstanceOf(UnauthorizedException);
+        expect((err as Error).message).toBe('E-posta veya parola hatalı');
+      }
+      expect(tokens.issueTokens).not.toHaveBeenCalled();
+    });
+  });
+
+  it('logout verilen refresh tokenı iptal eder', async () => {
+    const { service, tokens } = setup();
+    await service.logout({ refreshToken: 'rt-123' });
+    expect(tokens.revoke).toHaveBeenCalledWith('rt-123');
   });
 });

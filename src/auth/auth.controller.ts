@@ -1,6 +1,8 @@
 import { Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -9,6 +11,8 @@ import { Public } from '../common/decorators/index.js';
 import { RateLimit } from '../common/rate-limit/index.js';
 import { AuthService } from './auth.service.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
+import { LoginDto } from './dto/login.dto.js';
+import { LogoutDto } from './dto/logout.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 
@@ -31,6 +35,19 @@ export class AuthController {
     return this.auth.register(dto, userAgent);
   }
 
+  /** E-posta ve parolayla giriş yapar; token çifti döner. */
+  @Public()
+  @Post('login')
+  @HttpCode(200)
+  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiUnauthorizedResponse({ description: 'E-posta veya parola hatalı' })
+  login(
+    @Body() dto: LoginDto,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    return this.auth.login(dto, userAgent);
+  }
+
   /**
    * Refresh token ile yeni access + refresh çifti alır. Eski refresh token
    * iptal edilir; iptal edilmiş bir token yeniden kullanılırsa kullanıcının
@@ -48,5 +65,14 @@ export class AuthController {
     @Headers('user-agent') userAgent?: string,
   ): Promise<AuthResponseDto> {
     return this.auth.refresh(dto, userAgent);
+  }
+
+  /** Çıkış: bu cihazın refresh token'ını iptal eder. */
+  @Post('logout')
+  @HttpCode(204)
+  @ApiBearerAuth()
+  @ApiNoContentResponse()
+  logout(@Body() dto: LogoutDto): Promise<void> {
+    return this.auth.logout(dto);
   }
 }

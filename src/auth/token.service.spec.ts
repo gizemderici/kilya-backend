@@ -31,6 +31,7 @@ function setup() {
       create: vi.fn(async ({ data }) => data),
       findUnique: vi.fn<() => Promise<unknown>>(async () => null),
       updateMany: vi.fn(async () => ({ count: 1 })),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
     },
   };
   const jwt = new JwtService({
@@ -179,12 +180,12 @@ describe('TokenService', () => {
     });
   });
 
-  it('revoke: yalnızca verilen tokenı iptal eder', async () => {
+  it('revoke: yalnızca verilen tokenı siler, diğer oturumlara dokunmaz', async () => {
     const { service, prisma } = setup();
     await service.revoke('tok');
-    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { tokenHash: hashToken('tok'), revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+      where: { tokenHash: hashToken('tok') },
     });
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -89,11 +89,15 @@ export class TokenService {
     return this.issueTokens(stored.user, userAgent);
   }
 
-  /** Çıkış: verilen refresh token'ı iptal eder. Bilinmeyen token sessizce geçilir. */
+  /**
+   * Çıkış: verilen refresh token'ı siler. "İptal edildi" diye işaretlemiyoruz;
+   * uygulama çıkıştan sonra yanlışlıkla eski token'la gelirse bu çalıntı
+   * şüphesi sayılıp diğer cihazlardaki oturumları kapatmasın.
+   * Bilinmeyen token sessizce geçilir.
+   */
   async revoke(refreshToken: string): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
-      where: { tokenHash: hashToken(refreshToken), revokedAt: null },
-      data: { revokedAt: new Date() },
+    await this.prisma.refreshToken.deleteMany({
+      where: { tokenHash: hashToken(refreshToken) },
     });
   }
 

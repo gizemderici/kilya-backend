@@ -141,4 +141,91 @@ describe('Auth (e2e)', () => {
       await refresh('a'.repeat(43)).expect(401);
     });
   });
+
+  describe('POST /auth/login ve /auth/logout', () => {
+    const email = () => emailOf('giris');
+    const password = 'Gizli-Parola-123';
+
+    beforeAll(async () => {
+      await api()
+        .post('/api/v1/auth/register')
+        .send({ email: email(), password })
+        .expect(201);
+    });
+
+    it('doğru bilgilerle giriş yapar', async () => {
+      const res = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email().toUpperCase(), password })
+        .expect(200);
+      expect(res.body.user.email).toBe(email());
+      expect(res.body.refreshToken).toEqual(expect.any(String));
+    });
+
+    it('yanlış parola ve kayıtsız e-posta birebir aynı yanıtı verir', async () => {
+      const wrong = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password: 'yanlis-parola' })
+        .expect(401);
+      const unknown = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: emailOf('yok'), password })
+        .expect(401);
+
+      expect(wrong.body).toEqual(unknown.body);
+      expect(wrong.body.message).toBe('E-posta veya parola hatalı');
+    });
+
+    it('logout refresh tokenı iptal eder; token gerektirir', async () => {
+      const login = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password })
+        .expect(200);
+      const { accessToken, refreshToken } = login.body;
+
+      await api()
+        .post('/api/v1/auth/logout')
+        .send({ refreshToken })
+        .expect(401); // access token yok
+
+      await api()
+        .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ refreshToken })
+        .expect(204);
+
+      await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
+    });
+
+    it('çıkıştan sonra eski tokenla deneme diğer cihazın oturumunu kapatmaz', async () => {
+      const phone = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password })
+        .expect(200);
+      const tablet = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password })
+        .expect(200);
+
+      await api()
+        .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${phone.body.accessToken}`)
+        .send({ refreshToken: phone.body.refreshToken })
+        .expect(204);
+      // Telefon uygulaması hatayla eski token'ı tekrar deniyor
+      await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: phone.body.refreshToken })
+        .expect(401);
+
+      // Tablet etkilenmemeli
+      await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: tablet.body.refreshToken })
+        .expect(200);
+    });
+  });
 });
