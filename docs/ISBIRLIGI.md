@@ -1,7 +1,7 @@
 # Kilya — ortak durum ve görev devri
 
-Son kontrol: 17 Eylül 2026, Claude Code (Aşama 4 sonrası).
-İncelenen commit: `de200b2`, branch: `main`.
+Son kontrol: 17 Eylül 2026, Claude Code (Aşama 5 sonrası).
+İncelenen commit: `23a6362`, branch: `main`.
 İnceleme başlangıcında çalışma ağacı temizdi.
 
 ## Çalışma yöntemi
@@ -18,14 +18,14 @@ Bir görevin sahibi değiştirilmeden aynı dosyalarda ikinci çalışma başlam
 | Codex | İlk inceleme ve ortak çalışma belgeleri | AGENTS.md, CLAUDE.md, docs/ISBIRLIGI.md | Tamamlandı |
 | Codex | Veritabanı mimarisi ve veri sözlüğü | docs/VERITABANI.md, docs/ISBIRLIGI.md | Tamamlandı |
 | Claude Code | Aşama 4 — Kimlik doğrulama (4.1–4.8) | src/auth/**, src/users/**, src/mail/**, src/common/guards/**, src/common/decorators/**, src/types/express.d.ts, src/health/health.controller.ts, src/app.module.ts, src/config/env.ts, src/common/rate-limit/rate-limit.guard.ts (reset), docker-compose.yml (Mailpit), package.json/package-lock.json, .env.example, test/auth.e2e-spec.ts, test/app.e2e-spec.ts | Tamamlandı — main `de200b2` |
-| Claude Code | Aşama 5 — Kullanıcı, profil, hedefler, onaylar (5.1–5.4) | prisma/schema.prisma + yeni migration (UserGoal, Consent), prisma/seed.ts, src/users/**, src/common/guards/consent.guard.ts, src/common/decorators/**, src/app.module.ts, test/users.e2e-spec.ts, docs/yol-haritasi.md, docs/ISBIRLIGI.md | Devam ediyor — `feat/users-*` branch'leri, başlangıç `707b4b8` |
+| Claude Code | Aşama 5 — Kullanıcı, profil, hedefler, onaylar (5.1–5.4) | prisma/schema.prisma + yeni migration (UserGoal, Consent), prisma/seed.ts, src/users/**, src/common/guards/consent.guard.ts, src/common/decorators/**, src/app.module.ts, test/users.e2e-spec.ts, docs/yol-haritasi.md, docs/ISBIRLIGI.md | Tamamlandı — main `23a6362` |
 
-Claude Code Aşama 5 üzerinde çalışıyor; yukarıdaki dosya kapsamına (özellikle
-Prisma şeması ve migration) Codex dokunmamalı. Codex tamamlanan değişiklikleri
-inceler ve test açıklarını bildirir. İki tarafın kod yazacağı görevlerde önce
-dosya kapsamı bu tabloda belirlenir.
+Claude Code Aşama 5 işini bitirdi; sıradaki iş Aşama 6 (cihaz ve kalibrasyon)
+için henüz sahip atanmadı. Codex tamamlanan değişiklikleri inceler ve test
+açıklarını bildirir. İki tarafın kod yazacağı görevlerde önce dosya kapsamı bu
+tabloda belirlenir.
 
-Çalışma biçimi (Claude Code): her iş için `feat/auth-*` branch'i, iş bitince
+Çalışma biçimi (Claude Code): her iş için `feat/<modül>-*` branch'i, iş bitince
 `main`'e fast-forward merge ve push. Ara durum bu belgede güncellenir.
 
 ## Doğrulanan mevcut durum
@@ -93,3 +93,23 @@ bu belgeye kopyalanmaz.
   tespiti), src/auth/password-reset.service.ts, test/auth.e2e-spec.ts.
 - Sıradaki iş: Aşama 5 — kullanıcı, profil ve hedefler (UserGoal, Consent
   modelleri → migration). Sahibi belirlenmeli.
+
+## Son görev kaydı — Aşama 5 kullanıcı, profil, hedefler, onaylar (Claude Code)
+
+- Başlangıç: `707b4b8`; bitiş: `23a6362` (main, push edildi)
+- Branch'ler: feat/users-profile (57bb0ff), feat/users-goals (7a80ee5),
+  feat/users-consents (013daa1), feat/users-delete-export (23a6362)
+- Şema: GoalType, UserGoal, ConsentType, Consent; migration
+  `20260917112316_user_goals_consents` (geliştirme DB'sine uygulandı)
+- Uç noktalar: GET/PATCH/DELETE /me, POST /me/change-password, GET /me/export,
+  GET/PUT /me/goals, GET/POST /me/consents, DELETE /me/consents/:type
+- Ortak: TokenModule (TokenService artık Auth ve Users'ta ortak),
+  @RequireConsent + ConsentGuard (APP_GUARD), IsIanaTimezone doğrulayıcısı
+- Seed: test kullanıcısına hedef ve HEALTH_DATA onayı (idempotent)
+- Kontroller: `npm test` 89 geçti (11 dosya), `npm run test:e2e` 57 geçti
+  (3 dosya), lint / tsc / build temiz. Canlı: /me, /me/goals, /me/consents,
+  Swagger'da 16 yol.
+- Codex için inceleme önerisi: src/users/consents.service.ts (geçmiş mantığı),
+  src/users/account.service.ts (cascade silme), test/users.e2e-spec.ts.
+- Sıradaki iş: Aşama 6 — cihaz ve kalibrasyon (Device, DeviceSettings,
+  Calibration modelleri → migration). Sahibi belirlenmeli.

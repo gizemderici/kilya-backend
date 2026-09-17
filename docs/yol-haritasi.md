@@ -844,6 +844,16 @@ kez kullanılamıyor.
 
 **Süre:** 3–4 gün
 
+**Durum (17 Eylül 2026):** Tamamlandı (5.1–5.4). Notlar:
+- `change-password` 204 yerine yeni token çifti döner: tüm oturumlar kapatıldığı
+  için istemcinin tekrar giriş yapmadan devam edebilmesi gerekiyor.
+- Onay kayıtları silinmez; geri alma `revokedAt` doldurur, yeni sürüm onayı
+  eskisini kapatıp yeni kayıt açar (KVKK için geçmiş).
+- `@RequireConsent('HEALTH_DATA')` + global `ConsentGuard` hazır; Aşama 7'de
+  `POST /posture/batch` üzerine konacak.
+- `UserGoal` ve `Consent` tek migration'da (`user_goals_consents`).
+- Seed: test kullanıcısına POSTURE hedefi ve HEALTH_DATA onayı eklendi.
+
 Arayüzdeki karşılık: hedef seçimi, kayıt tamamlandı, profil ekranı.
 
 ### İş 5.1 — Profil
@@ -852,41 +862,41 @@ Arayüzdeki karşılık: hedef seçimi, kayıt tamamlandı, profil ekranı.
 nest g resource users --no-spec
 ```
 
-- [ ] `GET /api/v1/me` → kullanıcı bilgisi (parola hash'i asla dönmesin; yanıt
+- [x] `GET /api/v1/me` → kullanıcı bilgisi (parola hash'i asla dönmesin; yanıt
       için ayrı bir `UserResponseDto` kullan)
-- [ ] `PATCH /api/v1/me` → `displayName`, `birthYear`, `heightCm`, `weightKg`,
+- [x] `PATCH /api/v1/me` → `displayName`, `birthYear`, `heightCm`, `weightKg`,
       `timezone`
-- [ ] `timezone` için geçerli IANA adı mı diye kontrol et
+- [x] `timezone` için geçerli IANA adı mı diye kontrol et
       (`Intl.supportedValuesOf('timeZone')`)
-- [ ] `POST /api/v1/me/change-password` → mevcut parolayı doğrula, yenisini kaydet
+- [x] `POST /api/v1/me/change-password` → mevcut parolayı doğrula, yenisini kaydet
 
 **Bitti sayılır:** Profil güncellenip tekrar okunabiliyor; yanıtta `passwordHash` yok.
 
 ### İş 5.2 — Hedefler
 
-- [ ] `UserGoal` modelini şemaya ekle, migration çalıştır
-- [ ] `GET /api/v1/me/goals`
-- [ ] `PUT /api/v1/me/goals` → `{ goals: [{ type: "POSTURE", dailyTargetMinutes: 240 }] }`
+- [x] `UserGoal` modelini şemaya ekle, migration çalıştır
+- [x] `GET /api/v1/me/goals`
+- [x] `PUT /api/v1/me/goals` → `{ goals: [{ type: "POSTURE", dailyTargetMinutes: 240 }] }`
       listesinin tamamını değiştirir (transaction içinde sil + ekle)
 
 **Bitti sayılır:** Onboarding'deki hedef seçimi kaydedilip okunabiliyor.
 
 ### İş 5.3 — KVKK onayları
 
-- [ ] `Consent` modelini ekle
-- [ ] `GET /api/v1/me/consents`
-- [ ] `POST /api/v1/me/consents` → `{ type, version }`
-- [ ] `DELETE /api/v1/me/consents/:type` → `revokedAt` doldurur
-- [ ] Bir guard ya da servis kontrolü yaz: `HEALTH_DATA` onayı olmayan kullanıcı
+- [x] `Consent` modelini ekle
+- [x] `GET /api/v1/me/consents`
+- [x] `POST /api/v1/me/consents` → `{ type, version }`
+- [x] `DELETE /api/v1/me/consents/:type` → `revokedAt` doldurur
+- [x] Bir guard ya da servis kontrolü yaz: `HEALTH_DATA` onayı olmayan kullanıcı
       duruş verisi gönderemesin (`403`)
 
 **Bitti sayılır:** Onay vermemiş kullanıcının veri gönderme isteği reddediliyor.
 
 ### İş 5.4 — Hesap silme ve veri dışa aktarma
 
-- [ ] `DELETE /api/v1/me` → kullanıcıyı ve tüm verilerini sil
+- [x] `DELETE /api/v1/me` → kullanıcıyı ve tüm verilerini sil
       (`onDelete: Cascade` sayesinde tek sorgu)
-- [ ] `GET /api/v1/me/export` → kullanıcının tüm verilerini JSON olarak döndür
+- [x] `GET /api/v1/me/export` → kullanıcının tüm verilerini JSON olarak döndür
 
 **Bitti sayılır:** Silinen kullanıcının hiçbir tabloda kaydı kalmıyor.
 
@@ -1333,7 +1343,7 @@ Tüm adresler `/api/v1` ile başlar. 🔓 = token gerekmez.
 | 2 | Veritabanı | 1–2 gün | ✅ |
 | 3 | Ortak altyapı | 1–2 gün | ✅ |
 | 4 | Kimlik doğrulama | 1–1,5 hafta | ✅ (Google Client ID bekliyor) |
-| 5 | Kullanıcı, profil, hedefler | 3–4 gün | ☐ |
+| 5 | Kullanıcı, profil, hedefler | 3–4 gün | ✅ |
 | 6 | Cihaz ve kalibrasyon | 3–4 gün | ☐ |
 | 7 | Duruş verisi alma | 4–5 gün | ☐ |
 | 8 | İstatistikler | 4–5 gün | ☐ |
