@@ -3,9 +3,35 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import { UnauthorizedException } from '@nestjs/common';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import {
+  GoogleAuthService,
+  type GoogleProfile,
+} from '../src/auth/google-auth.service.js';
+import { RateLimitGuard } from '../src/common/rate-limit/index.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+
+/**
+ * Google'a ağ üzerinden gitmeden ID token doğrulamayı taklit eder.
+ * Token biçimi: "ok:<googleId>:<email>[:unverified]" ya da başka bir şey (401).
+ */
+class FakeGoogleAuthService {
+  readonly isConfigured = true;
+  async verify(idToken: string): Promise<GoogleProfile> {
+    const [tag, googleId, email, flag] = idToken.split(':');
+    if (tag !== 'ok' || !googleId) {
+      throw new UnauthorizedException('Google kimliği doğrulanamadı');
+    }
+    return {
+      googleId,
+      email,
+      emailVerified: flag !== 'unverified',
+      name: 'Google Kullanıcısı',
+    };
+  }
+}
 
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
@@ -17,16 +43,27 @@ describe('Auth (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(GoogleAuthService)
+      .useClass(FakeGoogleAuthService)
+      .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
     prisma = app.get(PrismaService);
   });
 
+  // Auth uç noktaları dakikada 10 istekle sınırlı; test paketi bunu aşar.
+  beforeEach(() => app.get(RateLimitGuard).reset());
+
   afterAll(async () => {
     await prisma?.user.deleteMany({
-      where: { email: { endsWith: `-${suffix}@kilya.test` } },
+      where: {
+        OR: [
+          { email: { endsWith: `-${suffix}@kilya.test` } },
+          { googleId: { startsWith: `g-${suffix}` } },
+        ],
+      },
     });
     await app?.close();
   });
@@ -226,6 +263,62 @@ describe('Auth (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: tablet.body.refreshToken })
         .expect(200);
+    });
+  });
+
+  describe('POST /auth/google', () => {
+    const google = (idToken: string) =>
+      api().post('/api/v1/auth/google').send({ idToken });
+    const gid = (name: string) => `g-${suffix}-${name}`;
+
+    it('geçersiz token 401 döner, kullanıcı oluşturmaz', async () => {
+      const before = await prisma.user.count();
+      const res = await google('bozuk-token-xxxxxxxxxxxxxxx').expect(401);
+      expect(res.body.message).toBe('Google kimliği doğrulanamadı');
+      expect(await prisma.user.count()).toBe(before);
+    });
+
+    it('ilk girişte hesap açar, ikinci girişte aynı hesabı kullanır', async () => {
+      const token = `ok:${gid('yeni')}:${emailOf('google')}`;
+
+      const first = await google(token).expect(200);
+      expect(first.body.user).toMatchObject({
+        email: emailOf('google'),
+        isAnonymous: false,
+      });
+
+      const second = await google(token).expect(200);
+      expect(second.body.user.id).toBe(first.body.user.id);
+    });
+
+    it('aynı e-postayla e-posta/parola hesabı varsa ona bağlanır', async () => {
+      const email = emailOf('bagla');
+      const registered = await api()
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'Gizli-Parola-123' })
+        .expect(201);
+
+      const res = await google(`ok:${gid('bagla')}:${email}`).expect(200);
+      expect(res.body.user.id).toBe(registered.body.user.id);
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      expect(user?.googleId).toBe(gid('bagla'));
+      expect(user?.passwordHash).toMatch(/^\$argon2id\$/); // parola korunur
+    });
+
+    it('doğrulanmamış e-posta mevcut hesaba bağlanmaz', async () => {
+      const email = emailOf('dogrulanmamis');
+      const registered = await api()
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'Gizli-Parola-123' })
+        .expect(201);
+
+      const res = await google(
+        `ok:${gid('dogrulanmamis')}:${email}:unverified`,
+      ).expect(200);
+
+      expect(res.body.user.id).not.toBe(registered.body.user.id);
+      expect(res.body.user.email).toBeNull();
     });
   });
 });

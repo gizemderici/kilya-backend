@@ -93,6 +93,11 @@ export class RateLimitGuard implements CanActivate, OnModuleDestroy {
     return true;
   }
 
+  /** Tüm sayaçları sıfırlar (testlerde, bir de ileride yönetim amaçlı). */
+  reset() {
+    this.buckets.clear();
+  }
+
   onModuleDestroy() {
     clearInterval(this.sweeper);
   }

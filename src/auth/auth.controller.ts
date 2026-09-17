@@ -4,6 +4,7 @@ import {
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -11,6 +12,7 @@ import { Public } from '../common/decorators/index.js';
 import { RateLimit } from '../common/rate-limit/index.js';
 import { AuthService } from './auth.service.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
+import { GoogleLoginDto } from './dto/google-login.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { LogoutDto } from './dto/logout.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
@@ -46,6 +48,25 @@ export class AuthController {
     @Headers('user-agent') userAgent?: string,
   ): Promise<AuthResponseDto> {
     return this.auth.login(dto, userAgent);
+  }
+
+  /**
+   * Google ile giriş. Android, Credential Manager'dan aldığı ID token'ı
+   * gönderir; hesap yoksa oluşturulur, aynı e-postalı hesap varsa bağlanır.
+   */
+  @Public()
+  @Post('google')
+  @HttpCode(200)
+  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Google kimliği doğrulanamadı' })
+  @ApiServiceUnavailableResponse({
+    description: 'GOOGLE_WEB_CLIENT_ID sunucuda tanımlı değil',
+  })
+  google(
+    @Body() dto: GoogleLoginDto,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    return this.auth.loginWithGoogle(dto, userAgent);
   }
 
   /**

@@ -26,7 +26,9 @@ import { PrismaModule } from './prisma/prisma.module.js';
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
     // Guard'lar kayıt sırasıyla çalışır; istek sınırı en önce kontrol edilsin
     // ardından JWT doğrulanır.
-    { provide: APP_GUARD, useClass: RateLimitGuard },
+    // useExisting: aynı örnek app.get(RateLimitGuard) ile de alınabilsin (testler).
+    RateLimitGuard,
+    { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
