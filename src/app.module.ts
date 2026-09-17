@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { AuthModule } from './auth/auth.module.js';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.js';
+import { JwtAuthGuard } from './common/guards/index.js';
 import { RateLimitGuard } from './common/rate-limit/index.js';
 import { validateEnv } from './config/env.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -18,12 +20,14 @@ import { PrismaModule } from './prisma/prisma.module.js';
     }),
     PrismaModule,
     HealthModule,
+    AuthModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
     // Guard'lar kayıt sırasıyla çalışır; istek sınırı en önce kontrol edilsin
-    // (Aşama 4'teki JWT guard'ı bundan sonra eklenecek).
+    // ardından JWT doğrulanır.
     { provide: APP_GUARD, useClass: RateLimitGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 export class AppModule {}

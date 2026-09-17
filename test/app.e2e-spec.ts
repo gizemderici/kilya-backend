@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { Body, Controller, type INestApplication, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  type INestApplication,
+  Post,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IsEmail, IsString } from 'class-validator';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import { Public } from '../src/common/decorators/index.js';
 import { RateLimit } from '../src/common/rate-limit/index.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
@@ -21,6 +28,7 @@ class EchoDto {
 }
 
 /** Sadece testlerde var olan uç noktalar: global ayarları denemek için. */
+@Public()
 @Controller('e2e-test')
 class E2eTestController {
   constructor(private readonly prisma: PrismaService) {}
@@ -43,6 +51,15 @@ class E2eTestController {
   }
 }
 
+/** @Public() olmayan bir uç nokta: global JwtAuthGuard'ı denemek için. */
+@Controller('e2e-test')
+class E2eProtectedController {
+  @Get('protected')
+  protectedRoute() {
+    return { ok: true };
+  }
+}
+
 describe('Uygulama (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -51,7 +68,7 @@ describe('Uygulama (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-      controllers: [E2eTestController],
+      controllers: [E2eTestController, E2eProtectedController],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -125,6 +142,26 @@ describe('Uygulama (e2e)', () => {
       statusCode: 409,
       message: 'Bu kayıt zaten mevcut',
       error: 'Conflict',
+    });
+  });
+
+  describe('JwtAuthGuard (global)', () => {
+    it('token olmadan korumalı uç nokta 401 döner', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/e2e-test/protected')
+        .expect(401);
+      expect(res.body.message).toBe('Giriş yapmanız gerekiyor');
+    });
+
+    it('bozuk token ile 401 döner', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/e2e-test/protected')
+        .set('Authorization', 'Bearer bozuk.token.degeri')
+        .expect(401);
+    });
+
+    it('/health token olmadan açık', async () => {
+      await request(app.getHttpServer()).get('/api/v1/health').expect(200);
     });
   });
 

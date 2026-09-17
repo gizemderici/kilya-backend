@@ -1,10 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { Public } from '../common/decorators/index.js';
 import { SkipRateLimit } from '../common/rate-limit/index.js';
 import { DatabaseHealthIndicator } from './database.health.js';
 
 @ApiTags('health')
+@Public()
 @SkipRateLimit()
 @Controller('health')
 export class HealthController {
