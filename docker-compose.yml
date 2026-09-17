@@ -25,5 +25,13 @@ services:
     ports:
       - "5433:5432"
 
+  # Geliştirmede giden e-postaları yakalar. Arayüz: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web arayüzü
+
 volumes:
   pgdata:

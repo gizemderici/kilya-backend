@@ -11,6 +11,7 @@ import {
   type GoogleProfile,
 } from '../src/auth/google-auth.service.js';
 import { RateLimitGuard } from '../src/common/rate-limit/index.js';
+import { MailService } from '../src/mail/mail.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 /**
@@ -33,9 +34,18 @@ class FakeGoogleAuthService {
   }
 }
 
+/** E-posta göndermek yerine kodları bellekte tutar. */
+class FakeMailService {
+  readonly codes = new Map<string, string>();
+  async sendPasswordResetCode(to: string, code: string) {
+    this.codes.set(to, code);
+  }
+}
+
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let mail: FakeMailService;
   const suffix = randomUUID();
   const emailOf = (name: string) => `${name}-${suffix}@kilya.test`;
   const api = () => request(app.getHttpServer());
@@ -48,11 +58,14 @@ describe('Auth (e2e)', () => {
     })
       .overrideProvider(GoogleAuthService)
       .useClass(FakeGoogleAuthService)
+      .overrideProvider(MailService)
+      .useClass(FakeMailService)
       .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
     prisma = app.get(PrismaService);
+    mail = app.get(MailService) as unknown as FakeMailService;
   });
 
   // Auth uç noktaları dakikada 10 istekle sınırlı; test paketi bunu aşar.
@@ -433,6 +446,101 @@ describe('Auth (e2e)', () => {
       const anon = await anonymous();
       await upgrade(anon.accessToken, {}).expect(400);
       await upgrade(anon.accessToken, { email: emailOf('eksik') }).expect(400);
+    });
+  });
+
+  describe('POST /auth/forgot-password ve /auth/reset-password', () => {
+    const email = () => emailOf('sifirla');
+    const oldPassword = 'Gizli-Parola-123';
+    const newPassword = 'Yeni-Parola-456';
+    const forgot = (e: string) =>
+      api().post('/api/v1/auth/forgot-password').send({ email: e });
+    const reset = (body: object) =>
+      api().post('/api/v1/auth/reset-password').send(body);
+
+    beforeAll(async () => {
+      await api()
+        .post('/api/v1/auth/register')
+        .send({ email: email(), password: oldPassword })
+        .expect(201);
+    });
+
+    it('kayıtlı ve kayıtsız e-posta için aynı 204 döner; sadece kayıtlıya kod gider', async () => {
+      await forgot(email()).expect(204);
+      await forgot(emailOf('kayitsiz')).expect(204);
+
+      expect(mail.codes.get(email())).toMatch(/^\d{6}$/);
+      expect(mail.codes.has(emailOf('kayitsiz'))).toBe(false);
+    });
+
+    it('kodla parola değişir, kod ikinci kez kullanılamaz, oturumlar kapanır', async () => {
+      const session = await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password: oldPassword })
+        .expect(200);
+
+      await forgot(email()).expect(204);
+      const code = mail.codes.get(email())!;
+
+      await reset({ email: email(), code, newPassword }).expect(204);
+
+      // Kod tek kullanımlık
+      const again = await reset({
+        email: email(),
+        code,
+        newPassword: 'Ucuncu-Parola-789',
+      }).expect(400);
+      expect(again.body.message).toBe('Kod geçersiz ya da süresi dolmuş');
+
+      // Eski parola geçmez, yeni parola geçer
+      await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password: oldPassword })
+        .expect(401);
+      await api()
+        .post('/api/v1/auth/login')
+        .send({ email: email(), password: newPassword })
+        .expect(200);
+
+      // Parola değişince önceki oturum kapanmış olmalı
+      await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.body.refreshToken })
+        .expect(401);
+    });
+
+    it('yanlış kod 400; yeni kod istenince eski kod geçersiz olur', async () => {
+      await forgot(email()).expect(204);
+      const first = mail.codes.get(email())!;
+      await forgot(email()).expect(204);
+      const second = mail.codes.get(email())!;
+
+      await reset({ email: email(), code: '000000', newPassword }).expect(400);
+      if (first !== second) {
+        await reset({ email: email(), code: first, newPassword }).expect(400);
+      }
+      await reset({ email: email(), code: second, newPassword }).expect(204);
+    });
+
+    it('süresi dolmuş kod 400', async () => {
+      await forgot(email()).expect(204);
+      const code = mail.codes.get(email())!;
+      const user = await prisma.user.findUnique({ where: { email: email() } });
+      await prisma.passwordResetToken.updateMany({
+        where: { userId: user!.id, usedAt: null },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+
+      await reset({ email: email(), code, newPassword }).expect(400);
+    });
+
+    it('bozuk gövde 400 (kod 6 hane, parola en az 8)', async () => {
+      await reset({ email: email(), code: '12', newPassword }).expect(400);
+      await reset({
+        email: email(),
+        code: '123456',
+        newPassword: 'kisa',
+      }).expect(400);
     });
   });
 });

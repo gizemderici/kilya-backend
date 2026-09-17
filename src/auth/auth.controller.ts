@@ -13,12 +13,15 @@ import {
 import { CurrentUser, Public } from '../common/decorators/index.js';
 import { RateLimit } from '../common/rate-limit/index.js';
 import { AuthService } from './auth.service.js';
+import { PasswordResetService } from './password-reset.service.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { GoogleLoginDto } from './dto/google-login.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { LogoutDto } from './dto/logout.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { UpgradeDto } from './dto/upgrade.dto.js';
 
 @ApiTags('auth')
@@ -26,7 +29,10 @@ import { UpgradeDto } from './dto/upgrade.dto.js';
 // Kimlik uç noktaları kaba kuvvet saldırılarına açık: dakikada 10 istek.
 @RateLimit({ limit: 10, ttlMs: 60_000 })
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   /** E-posta ve parolayla yeni hesap açar; token çifti döner. */
   @Public()
@@ -129,5 +135,31 @@ export class AuthController {
   @ApiNoContentResponse()
   logout(@Body() dto: LogoutDto): Promise<void> {
     return this.auth.logout(dto);
+  }
+  /**
+   * Parola sıfırlama kodu ister. E-posta kayıtlı olsun olmasın 204 döner;
+   * kayıtlıysa 6 haneli kod e-postayla gönderilir (15 dakika geçerli).
+   */
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(204)
+  // E-posta bombardımanını önlemek için daha sıkı: dakikada 5 istek.
+  @RateLimit({ limit: 5, ttlMs: 60_000 })
+  @ApiNoContentResponse()
+  forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    return this.passwordReset.requestReset(dto);
+  }
+
+  /**
+   * E-postayla gelen kodla parolayı değiştirir. Kod tek kullanımlık;
+   * başarılı olunca kullanıcının tüm oturumları kapatılır.
+   */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  @ApiBadRequestResponse({ description: 'Kod geçersiz ya da süresi dolmuş' })
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    return this.passwordReset.resetPassword(dto);
   }
 }
