@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { RequireConsent } from '../src/common/decorators/index.js';
 import { RateLimitGuard } from '../src/common/rate-limit/index.js';
+import { MailService } from '../src/mail/mail.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 /** Sadece testte: HEALTH_DATA onayı isteyen bir uç nokta (Aşama 7'nin taklidi). */
@@ -51,7 +52,11 @@ describe('Me (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
       controllers: [E2eConsentController],
-    }).compile();
+    })
+      // E-posta gerçekten gitmesin (Mailpit kapalıyken test çökmesin)
+      .overrideProvider(MailService)
+      .useValue({ sendPasswordResetCode: async () => undefined })
+      .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
@@ -369,6 +374,86 @@ describe('Me (e2e)', () => {
       const b = await register('onay-b');
       await grant(a, { type: 'HEALTH_DATA', version: '2026-09' }).expect(201);
       await posture(b).expect(403);
+    });
+  });
+
+  describe('GET /me/export ve DELETE /me', () => {
+    it('dışa aktarma profil, hedef, onay ve oturumları içerir; gizli alan yok', async () => {
+      const s = await register('disa-aktar');
+      await api()
+        .patch('/api/v1/me')
+        .set(auth(s))
+        .send({ displayName: 'Gizem' })
+        .expect(200);
+      await api()
+        .put('/api/v1/me/goals')
+        .set(auth(s))
+        .send({ goals: [{ type: 'POSTURE', dailyTargetMinutes: 120 }] })
+        .expect(200);
+      await api()
+        .post('/api/v1/me/consents')
+        .set(auth(s))
+        .send({ type: 'HEALTH_DATA', version: '2026-09' })
+        .expect(201);
+
+      const res = await api().get('/api/v1/me/export').set(auth(s)).expect(200);
+
+      expect(res.body).toMatchObject({
+        format: 'kilya-export/1',
+        exportedAt: expect.any(String),
+        profile: { id: s.user.id, displayName: 'Gizem' },
+        goals: [{ type: 'POSTURE', dailyTargetMinutes: 120 }],
+        consents: [{ type: 'HEALTH_DATA', version: '2026-09', isActive: true }],
+        sessions: [{ revokedAt: null }],
+      });
+      const json = JSON.stringify(res.body);
+      expect(json).not.toContain('passwordHash');
+      expect(json).not.toContain('tokenHash');
+      expect(json).not.toContain(s.refreshToken);
+    });
+
+    it('silinen kullanıcının hiçbir tabloda kaydı kalmaz; token 401 olur', async () => {
+      const s = await register('sil');
+      await api()
+        .put('/api/v1/me/goals')
+        .set(auth(s))
+        .send({ goals: [{ type: 'POSTURE' }] })
+        .expect(200);
+      await api()
+        .post('/api/v1/me/consents')
+        .set(auth(s))
+        .send({ type: 'HEALTH_DATA', version: '2026-09' })
+        .expect(201);
+      await api()
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: emailOf('sil') })
+        .expect(204);
+
+      await api().delete('/api/v1/me').set(auth(s)).expect(204);
+
+      const userId = s.user.id;
+      const counts = await Promise.all([
+        prisma.user.count({ where: { id: userId } }),
+        prisma.refreshToken.count({ where: { userId } }),
+        prisma.passwordResetToken.count({ where: { userId } }),
+        prisma.userGoal.count({ where: { userId } }),
+        prisma.consent.count({ where: { userId } }),
+      ]);
+      expect(counts).toEqual([0, 0, 0, 0, 0]);
+
+      // Süresi dolmamış access token bile artık işe yaramaz
+      await api().get('/api/v1/me').set(auth(s)).expect(401);
+      await api().delete('/api/v1/me').set(auth(s)).expect(401);
+      await api()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: s.refreshToken })
+        .expect(401);
+
+      // E-posta yeniden kayıt için serbest
+      await api()
+        .post('/api/v1/auth/register')
+        .send({ email: emailOf('sil'), password: 'Gizli-Parola-123' })
+        .expect(201);
     });
   });
 });

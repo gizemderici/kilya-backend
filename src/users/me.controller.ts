@@ -25,6 +25,7 @@ import {
 import { AuthResponseDto } from '../auth/dto/auth-response.dto.js';
 import { CurrentUser } from '../common/decorators/index.js';
 import { ConsentType } from '../generated/prisma/enums.js';
+import { AccountService } from './account.service.js';
 import { ConsentsService } from './consents.service.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import {
@@ -32,6 +33,7 @@ import {
   ConsentsResponseDto,
   GrantConsentDto,
 } from './dto/consents.dto.js';
+import { UserExportDto } from './dto/export.dto.js';
 import { GoalsResponseDto, PutGoalsDto } from './dto/goals.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
@@ -47,6 +49,7 @@ export class MeController {
     private readonly users: UsersService,
     private readonly goals: GoalsService,
     private readonly consents: ConsentsService,
+    private readonly account: AccountService,
   ) {}
 
   /** Profil bilgisi. */
@@ -64,6 +67,24 @@ export class MeController {
     @Body() dto: UpdateProfileDto,
   ): Promise<UserResponseDto> {
     return this.users.updateProfile(userId, dto);
+  }
+
+  /**
+   * Hesabı ve tüm verilerini kalıcı olarak siler (geri alınamaz).
+   * Elindeki access token da bundan sonra 401 alır.
+   */
+  @Delete()
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  deleteAccount(@CurrentUser('id') userId: string): Promise<void> {
+    return this.account.deleteAccount(userId);
+  }
+
+  /** Kullanıcının tüm verilerini JSON olarak indirir (KVKK veri taşınabilirliği). */
+  @Get('export')
+  @ApiOkResponse({ type: UserExportDto })
+  exportData(@CurrentUser('id') userId: string): Promise<UserExportDto> {
+    return this.account.exportData(userId);
   }
 
   /**

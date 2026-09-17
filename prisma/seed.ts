@@ -30,6 +30,21 @@ async function main() {
     },
   });
 
+  // Onboarding tamamlanmış gibi: hedef + KVKK onayı (duruş verisi gönderebilsin)
+  await prisma.userGoal.upsert({
+    where: { userId_type: { userId: user.id, type: 'POSTURE' } },
+    update: { dailyTargetMinutes: 240 },
+    create: { userId: user.id, type: 'POSTURE', dailyTargetMinutes: 240 },
+  });
+  const activeConsent = await prisma.consent.findFirst({
+    where: { userId: user.id, type: 'HEALTH_DATA', revokedAt: null },
+  });
+  if (!activeConsent) {
+    await prisma.consent.create({
+      data: { userId: user.id, type: 'HEALTH_DATA', version: '2026-09' },
+    });
+  }
+
   console.log(`Seed tamam: ${user.email} (${user.id})`);
   // Recommendation kayıtları Aşama 9'da model eklenince buraya gelecek.
 }
