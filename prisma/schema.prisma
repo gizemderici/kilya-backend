@@ -29,6 +29,8 @@ model User {
 
   refreshTokens RefreshToken[]
   resetTokens   PasswordResetToken[]
+  goals         UserGoal[]
+  consents      Consent[]
 }
 
 model RefreshToken {
@@ -52,4 +54,40 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Hedefler ve onaylar ----------
+
+enum GoalType {
+  POSTURE // duruşumu düzeltmek
+  BACK_PAIN // sırt ağrısını azaltmak
+  KYPHOSIS // kifozu önlemek
+}
+
+model UserGoal {
+  id                 String   @id @default(uuid())
+  userId             String
+  type               GoalType
+  dailyTargetMinutes Int?
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+}
+
+enum ConsentType {
+  HEALTH_DATA // KVKK: sağlık verisinin işlenmesi
+  RESEARCH_SHARING // anonim verinin araştırmada kullanılması
+}
+
+model Consent {
+  id        String      @id @default(uuid())
+  userId    String
+  type      ConsentType
+  version   String // onaylanan metnin sürümü, ör. "2026-09"
+  grantedAt DateTime    @default(now())
+  revokedAt DateTime?
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
 }

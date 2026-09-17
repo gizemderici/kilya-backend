@@ -208,4 +208,82 @@ describe('Me (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('GET/PUT /me/goals', () => {
+    it('başlangıçta boş; PUT ile yazılır ve okunur', async () => {
+      const s = await anonymous(); // hedef seçimi onboarding'de, hesapsız da olabilir
+      const empty = await api()
+        .get('/api/v1/me/goals')
+        .set(auth(s))
+        .expect(200);
+      expect(empty.body).toEqual({ goals: [] });
+
+      const put = await api()
+        .put('/api/v1/me/goals')
+        .set(auth(s))
+        .send({
+          goals: [
+            { type: 'POSTURE', dailyTargetMinutes: 240 },
+            { type: 'BACK_PAIN' },
+          ],
+        })
+        .expect(200);
+      expect(put.body.goals).toEqual([
+        {
+          type: 'POSTURE',
+          dailyTargetMinutes: 240,
+          createdAt: expect.any(String),
+        },
+        {
+          type: 'BACK_PAIN',
+          dailyTargetMinutes: null,
+          createdAt: expect.any(String),
+        },
+      ]);
+
+      const get = await api().get('/api/v1/me/goals').set(auth(s)).expect(200);
+      expect(get.body.goals.map((g: { type: string }) => g.type)).toEqual([
+        'POSTURE',
+        'BACK_PAIN',
+      ]);
+    });
+
+    it('PUT listenin tamamını değiştirir; boş liste hepsini siler', async () => {
+      const s = await register('hedef');
+      const put = (goals: object[]) =>
+        api().put('/api/v1/me/goals').set(auth(s)).send({ goals });
+
+      await put([{ type: 'POSTURE' }, { type: 'KYPHOSIS' }]).expect(200);
+      const replaced = await put([{ type: 'BACK_PAIN' }]).expect(200);
+      expect(replaced.body.goals).toHaveLength(1);
+      expect(replaced.body.goals[0].type).toBe('BACK_PAIN');
+
+      const cleared = await put([]).expect(200);
+      expect(cleared.body.goals).toEqual([]);
+    });
+
+    it('geçersiz tür, tekrar eden tür ve aralık dışı hedef 400', async () => {
+      const s = await register('hedef-hata');
+      const put = (goals: object[]) =>
+        api().put('/api/v1/me/goals').set(auth(s)).send({ goals });
+
+      await put([{ type: 'RUNNING' }]).expect(400);
+      await put([{ type: 'POSTURE' }, { type: 'POSTURE' }]).expect(400);
+      await put([{ type: 'POSTURE', dailyTargetMinutes: 2000 }]).expect(400);
+      await put([{ type: 'POSTURE', extra: 1 }]).expect(400);
+    });
+
+    it('bir kullanıcının hedefleri diğerini etkilemez', async () => {
+      const a = await register('hedef-a');
+      const b = await register('hedef-b');
+      await api()
+        .put('/api/v1/me/goals')
+        .set(auth(a))
+        .send({ goals: [{ type: 'POSTURE' }] })
+        .expect(200);
+
+      const res = await api().get('/api/v1/me/goals').set(auth(b)).expect(200);
+      expect(res.body.goals).toEqual([]);
+    });
+  });
 });

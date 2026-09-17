@@ -6,6 +6,7 @@ import {
   HttpCode,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -17,8 +18,10 @@ import {
 import { AuthResponseDto } from '../auth/dto/auth-response.dto.js';
 import { CurrentUser } from '../common/decorators/index.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { GoalsResponseDto, PutGoalsDto } from './dto/goals.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
+import { GoalsService } from './goals.service.js';
 import { UsersService } from './users.service.js';
 
 /** Giriş yapmış kullanıcının kendi hesabı. Tüm uç noktalar token ister. */
@@ -26,7 +29,10 @@ import { UsersService } from './users.service.js';
 @ApiBearerAuth()
 @Controller('me')
 export class MeController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly goals: GoalsService,
+  ) {}
 
   /** Profil bilgisi. */
   @Get()
@@ -62,5 +68,24 @@ export class MeController {
     @Headers('user-agent') userAgent?: string,
   ): Promise<AuthResponseDto> {
     return this.users.changePassword(userId, dto, userAgent);
+  }
+
+  // ---------- Hedefler ----------
+
+  /** Kullanıcının hedefleri (onboarding'deki seçim). */
+  @Get('goals')
+  @ApiOkResponse({ type: GoalsResponseDto })
+  async getGoals(@CurrentUser('id') userId: string): Promise<GoalsResponseDto> {
+    return { goals: await this.goals.list(userId) };
+  }
+
+  /** Hedef listesinin tamamını değiştirir; gönderilmeyenler silinir. */
+  @Put('goals')
+  @ApiOkResponse({ type: GoalsResponseDto })
+  async putGoals(
+    @CurrentUser('id') userId: string,
+    @Body() dto: PutGoalsDto,
+  ): Promise<GoalsResponseDto> {
+    return { goals: await this.goals.replace(userId, dto) };
   }
 }
