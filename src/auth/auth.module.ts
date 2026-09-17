@@ -7,11 +7,12 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { PasswordResetService } from './password-reset.service.js';
-import { TokenService } from './token.service.js';
+import { TokenModule } from './token.module.js';
 
 @Module({
   imports: [
     UsersModule,
+    TokenModule,
     JwtModule.registerAsync({
       // Global: JwtAuthGuard (APP_GUARD) her modülden JwtService'i alabilsin.
       global: true,
@@ -25,11 +26,6 @@ import { TokenService } from './token.service.js';
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    TokenService,
-    GoogleAuthService,
-    PasswordResetService,
-  ],
+  providers: [AuthService, GoogleAuthService, PasswordResetService],
 })
 export class AuthModule {}
