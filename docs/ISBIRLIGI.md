@@ -17,12 +17,15 @@ Bir görevin sahibi değiştirilmeden aynı dosyalarda ikinci çalışma başlam
 |---|---|---|---|
 | Codex | İlk inceleme ve ortak çalışma belgeleri | AGENTS.md, CLAUDE.md, docs/ISBIRLIGI.md | Tamamlandı |
 | Codex | Veritabanı mimarisi ve veri sözlüğü | docs/VERITABANI.md, docs/ISBIRLIGI.md | Tamamlandı |
-| Claude Code | Mevcut oturumun görevi | Henüz bildirilmedi | Oturumdan doğrulanmalı |
+| Claude Code | Aşama 4 — Kimlik doğrulama (4.1–4.8) | src/auth/**, src/users/**, src/common/guards/**, src/common/decorators/**, src/types/express.d.ts, src/health/health.controller.ts (@Public), src/app.module.ts, test/auth.e2e-spec.ts, test/app.e2e-spec.ts; 4.8 için docker-compose.yml (Mailpit), package.json/package-lock.json (nodemailer), .env.example, src/config/env.ts | Devam ediyor — 4.1–4.3 main'de (7ce1255, 1d590d0); 4.4 feat/auth-refresh branch'inde |
 
-Kod üzerinde yeni bir görev üstlenilmedi. Önerilen başlangıç paylaşımı:
-Claude Code mevcut backend geliştirmesine devam eder; Codex tamamlanan
-değişiklikleri inceler ve test açıklarını bildirir. İki tarafın kod yazacağı
-görevlerde önce dosya kapsamı bu tabloda belirlenir.
+Claude Code Aşama 4 (Auth) üzerinde çalışıyor; yukarıdaki dosya kapsamına
+Codex dokunmamalı. Codex tamamlanan değişiklikleri inceler ve test açıklarını
+bildirir. İki tarafın kod yazacağı görevlerde önce dosya kapsamı bu tabloda
+belirlenir.
+
+Çalışma biçimi (Claude Code): her iş için `feat/auth-*` branch'i, iş bitince
+`main`'e fast-forward merge ve push. Ara durum bu belgede güncellenir.
 
 ## Doğrulanan mevcut durum
 
