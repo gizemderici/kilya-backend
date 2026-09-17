@@ -18,9 +18,10 @@ Bir görevin sahibi değiştirilmeden aynı dosyalarda ikinci çalışma başlam
 | Codex | İlk inceleme ve ortak çalışma belgeleri | AGENTS.md, CLAUDE.md, docs/ISBIRLIGI.md | Tamamlandı |
 | Codex | Veritabanı mimarisi ve veri sözlüğü | docs/VERITABANI.md, docs/ISBIRLIGI.md | Tamamlandı |
 | Claude Code | Aşama 4 — Kimlik doğrulama (4.1–4.8) | src/auth/**, src/users/**, src/mail/**, src/common/guards/**, src/common/decorators/**, src/types/express.d.ts, src/health/health.controller.ts, src/app.module.ts, src/config/env.ts, src/common/rate-limit/rate-limit.guard.ts (reset), docker-compose.yml (Mailpit), package.json/package-lock.json, .env.example, test/auth.e2e-spec.ts, test/app.e2e-spec.ts | Tamamlandı — main `de200b2` |
+| Claude Code | Aşama 5 — Kullanıcı, profil, hedefler, onaylar (5.1–5.4) | prisma/schema.prisma + yeni migration (UserGoal, Consent), prisma/seed.ts, src/users/**, src/common/guards/consent.guard.ts, src/common/decorators/**, src/app.module.ts, test/users.e2e-spec.ts, docs/yol-haritasi.md, docs/ISBIRLIGI.md | Devam ediyor — `feat/users-*` branch'leri, başlangıç `707b4b8` |
 
-Claude Code Aşama 4 (Auth) işini bitirdi; sıradaki iş Aşama 5 (kullanıcı,
-profil, hedefler) için henüz sahip atanmadı. Codex tamamlanan değişiklikleri
+Claude Code Aşama 5 üzerinde çalışıyor; yukarıdaki dosya kapsamına (özellikle
+Prisma şeması ve migration) Codex dokunmamalı. Codex tamamlanan değişiklikleri
 inceler ve test açıklarını bildirir. İki tarafın kod yazacağı görevlerde önce
 dosya kapsamı bu tabloda belirlenir.
 
