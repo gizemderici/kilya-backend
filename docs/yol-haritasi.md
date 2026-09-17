@@ -659,7 +659,7 @@ parolalar loglarda yok.
 guard'ımız var: `src/common/rate-limit/`.
 
 - [x] Genel sınır: IP ve uç nokta başına dakikada 100 istek (`RateLimitGuard`)
-- [ ] Auth uç noktaları için daha sıkı sınır: dakikada 5–10 istek
+- [x] Auth uç noktaları için daha sıkı sınır: dakikada 10 (forgot-password 5) istek
       (`@RateLimit({ limit: 10, ttlMs: 60_000 })`, Aşama 4'te)
 
 **Bitti sayılır:** Sınırı aşan istekler `429` ve `Retry-After` başlığı alıyor.
@@ -682,6 +682,20 @@ npm i @nestjs/terminus
 ## Aşama 4 — Kimlik doğrulama (Auth)
 
 **Süre:** 1–1,5 hafta. En önemli aşama; acele etme.
+
+**Durum (17 Eylül 2026):** Kod tarafı tamamlandı (4.1–4.8). Açık kalan tek madde
+Google Cloud Console'da Web OAuth istemcisi oluşturup `GOOGLE_WEB_CLIENT_ID`'yi
+`.env`'e yazmak; o olmadan `/auth/google` 503 döner, diğer her şey çalışır.
+
+Uygulamada yol haritasından farklar:
+- Çıkışta refresh token satırı *silinir*, iptal işaretlenmez: uygulama çıkıştan
+  sonra yanlışlıkla eski tokenla gelirse çalıntı şüphesiyle diğer cihazların
+  oturumları kapanmasın.
+- Sıfırlama kodunun hash'ine `userId` katılır (`sha256(userId:kod)`): 6 haneli
+  kod iki kullanıcıya aynı düşebilir, `tokenHash` benzersiz.
+- Kod tahminine karşı ek deneme sayacı yok; dakikada 10 istek sınırı + 15 dk
+  ömür yeterli görüldü (IP başına en çok ~150 deneme / 1.000.000 olasılık).
+- `RateLimitGuard.reset()` eklendi; e2e testleri auth sınırını aşıyor.
 
 Arayüzdeki karşılık: karşılama, kayıt formu, giriş, parola sıfırlama,
 "hesapsız devam et".
@@ -708,16 +722,16 @@ nest g module users
 nest g service users
 ```
 
-- [ ] `JwtModule.registerAsync` ile secret ve süreyi `ConfigService`'ten al
+- [x] `JwtModule.registerAsync` ile secret ve süreyi `ConfigService`'ten al
 
 ### İş 4.2 — Global guard ve decorator'lar
 
-- [ ] `src/common/guards/jwt-auth.guard.ts`: `Authorization: Bearer ...`
+- [x] `src/common/guards/jwt-auth.guard.ts`: `Authorization: Bearer ...`
       başlığını doğrular, `request.user` içine `{ id, isAnonymous }` koyar
-- [ ] Guard'ı `APP_GUARD` ile **tüm uygulamaya** uygula; böylece yeni bir uç
+- [x] Guard'ı `APP_GUARD` ile **tüm uygulamaya** uygula; böylece yeni bir uç
       noktayı korumayı unutamazsın
-- [ ] `@Public()` decorator'ı: giriş ve kayıt gibi uç noktaları guard'dan muaf tutar
-- [ ] `@CurrentUser()` decorator'ı: controller'da kullanıcıyı almak için
+- [x] `@Public()` decorator'ı: giriş ve kayıt gibi uç noktaları guard'dan muaf tutar
+- [x] `@CurrentUser()` decorator'ı: controller'da kullanıcıyı almak için
 
 **Bitti sayılır:** `/health` dışındaki her uç nokta token olmadan `401` dönüyor.
 
@@ -725,10 +739,10 @@ nest g service users
 
 `POST /api/v1/auth/register`
 
-- [ ] `RegisterDto`: `email` (`@IsEmail`), `password` (en az 8 karakter)
-- [ ] E-postayı küçük harfe çevir ve boşlukları temizle
-- [ ] Parolayı `argon2.hash()` ile hash'le
-- [ ] Kullanıcıyı oluştur, access + refresh token döndür:
+- [x] `RegisterDto`: `email` (`@IsEmail`), `password` (en az 8 karakter)
+- [x] E-postayı küçük harfe çevir ve boşlukları temizle
+- [x] Parolayı `argon2.hash()` ile hash'le
+- [x] Kullanıcıyı oluştur, access + refresh token döndür:
 
 ```json
 {
@@ -743,23 +757,23 @@ metin olarak görünmüyor.
 
 ### İş 4.4 — Token üretimi ve yenileme
 
-- [ ] `TokenService` yaz:
+- [x] `TokenService` yaz:
   - `issueTokens(user)`: JWT imzalar, 32 baytlık rastgele refresh token üretir
     (`crypto.randomBytes`), SHA-256 hash'ini veritabanına yazar
   - `rotate(refreshToken)`: hash'i bulur, süresi ve iptal durumu kontrol edilir,
     eskisini iptal edip yenisini verir
-- [ ] `POST /api/v1/auth/refresh` → `{ refreshToken }` alır, yeni çift döndürür
-- [ ] İptal edilmiş token tekrar gelirse kullanıcının tüm refresh token'larını iptal et
+- [x] `POST /api/v1/auth/refresh` → `{ refreshToken }` alır, yeni çift döndürür
+- [x] İptal edilmiş token tekrar gelirse kullanıcının tüm refresh token'larını iptal et
 
 **Bitti sayılır:** Aynı refresh token ikinci kez kullanıldığında `401` dönüyor
 ve kullanıcının diğer oturumları da kapanıyor.
 
 ### İş 4.5 — Giriş ve çıkış
 
-- [ ] `POST /api/v1/auth/login` → e-posta ve parolayı `argon2.verify()` ile kontrol et
-- [ ] Hata mesajı her durumda aynı olsun: "E-posta veya parola hatalı"
+- [x] `POST /api/v1/auth/login` → e-posta ve parolayı `argon2.verify()` ile kontrol et
+- [x] Hata mesajı her durumda aynı olsun: "E-posta veya parola hatalı"
       (hangi e-postaların kayıtlı olduğu dışarıya sızmasın)
-- [ ] `POST /api/v1/auth/logout` → gönderilen refresh token'ı iptal et
+- [x] `POST /api/v1/auth/logout` → gönderilen refresh token'ı iptal et
 
 **Bitti sayılır:** Yanlış parola ve kayıtlı olmayan e-posta aynı yanıtı veriyor.
 
@@ -769,10 +783,10 @@ Android tarafı Credential Manager ile bir **ID token** alır ve sunucuya gönde
 
 `POST /api/v1/auth/google` → `{ idToken }`
 
-- [ ] Google Cloud Console'da bir **Web** OAuth istemcisi oluştur; Client ID'yi
+- [ ] (Gizem) Google Cloud Console'da bir **Web** OAuth istemcisi oluştur; Client ID'yi
       `GOOGLE_WEB_CLIENT_ID` olarak kaydet (Android uygulaması da bunu
       `serverClientId` olarak kullanacak)
-- [ ] Token'ı doğrula:
+- [x] Token'ı doğrula:
 
 ```ts
 const ticket = await this.googleClient.verifyIdToken({
@@ -782,7 +796,7 @@ const ticket = await this.googleClient.verifyIdToken({
 const payload = ticket.getPayload(); // sub, email, email_verified, name
 ```
 
-- [ ] Kullanıcı bulma sırası:
+- [x] Kullanıcı bulma sırası:
   1. `googleId = sub` olan kullanıcı varsa → giriş yap
   2. Yoksa ve `email_verified` doğruysa, aynı e-postalı kullanıcı varsa →
      hesaba `googleId` ekle
@@ -792,13 +806,13 @@ const payload = ticket.getPayload(); // sub, email, email_verified, name
 
 ### İş 4.7 — Hesapsız kullanım (anonim kullanıcı)
 
-- [ ] `POST /api/v1/auth/anonymous` → `isAnonymous: true` bir kullanıcı
+- [x] `POST /api/v1/auth/anonymous` → `isAnonymous: true` bir kullanıcı
       oluştur, token döndür
-- [ ] `POST /api/v1/auth/upgrade` (giriş yapmış anonim kullanıcı için) →
+- [x] `POST /api/v1/auth/upgrade` (giriş yapmış anonim kullanıcı için) →
       `{ email, password }` ya da `{ idToken }` alır, **aynı kullanıcı kaydını**
       günceller; böylece önceki duruş verileri kaybolmaz
-- [ ] Anonim kullanıcının e-postası zaten başka bir hesaptaysa `409` dön
-- [ ] 90 gün hiç veri göndermemiş anonim hesapları temizleyen bir zamanlanmış
+- [x] Anonim kullanıcının e-postası zaten başka bir hesaptaysa `409` dön
+- [x] 90 gün hiç veri göndermemiş anonim hesapları temizleyen bir zamanlanmış
       görev için not al (Aşama 12)
 
 **Bitti sayılır:** Anonim kullanıcı veri gönderip sonra kayıt olduğunda verileri
@@ -811,13 +825,13 @@ npm i nodemailer
 npm i -D @types/nodemailer
 ```
 
-- [ ] Geliştirmede e-postaları görmek için `docker-compose.yml`'a **Mailpit**
+- [x] Geliştirmede e-postaları görmek için `docker-compose.yml`'a **Mailpit**
       ekle (`axllent/mailpit`, arayüz: `localhost:8025`)
-- [ ] `POST /api/v1/auth/forgot-password` → `{ email }`
+- [x] `POST /api/v1/auth/forgot-password` → `{ email }`
   - Kullanıcı olsun olmasın **her zaman 204** dön
   - Varsa 6 haneli kod ya da rastgele token üret, hash'ini 15 dakika ömürle kaydet,
     e-posta gönder
-- [ ] `POST /api/v1/auth/reset-password` → `{ email, code, newPassword }`
+- [x] `POST /api/v1/auth/reset-password` → `{ email, code, newPassword }`
   - Kodu doğrula, parolayı güncelle, token'ı kullanılmış işaretle
   - Kullanıcının tüm refresh token'larını iptal et
 
@@ -1317,8 +1331,8 @@ Tüm adresler `/api/v1` ile başlar. 🔓 = token gerekmez.
 | 0 | Hazırlık | yarım gün | ✅ |
 | 1 | Proje iskeleti | 1 gün | ✅ |
 | 2 | Veritabanı | 1–2 gün | ✅ |
-| 3 | Ortak altyapı | 1–2 gün | ✅ (auth sınırı Aşama 4'te) |
-| 4 | Kimlik doğrulama | 1–1,5 hafta | ☐ |
+| 3 | Ortak altyapı | 1–2 gün | ✅ |
+| 4 | Kimlik doğrulama | 1–1,5 hafta | ✅ (Google Client ID bekliyor) |
 | 5 | Kullanıcı, profil, hedefler | 3–4 gün | ☐ |
 | 6 | Cihaz ve kalibrasyon | 3–4 gün | ☐ |
 | 7 | Duruş verisi alma | 4–5 gün | ☐ |
