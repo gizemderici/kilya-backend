@@ -4,7 +4,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth/auth.module.js';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.js';
-import { JwtAuthGuard } from './common/guards/index.js';
+import { ConsentGuard, JwtAuthGuard } from './common/guards/index.js';
 import { RateLimitGuard } from './common/rate-limit/index.js';
 import { validateEnv } from './config/env.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -34,6 +34,7 @@ import { UsersModule } from './users/users.module.js';
     RateLimitGuard,
     { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: ConsentGuard },
   ],
 })
 export class AppModule {}

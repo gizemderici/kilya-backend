@@ -1,12 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
+import { Controller, type INestApplication, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import { RequireConsent } from '../src/common/decorators/index.js';
 import { RateLimitGuard } from '../src/common/rate-limit/index.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+
+/** Sadece testte: HEALTH_DATA onayı isteyen bir uç nokta (Aşama 7'nin taklidi). */
+@Controller('e2e-consent')
+class E2eConsentController {
+  @Post('posture')
+  @RequireConsent('HEALTH_DATA')
+  posture() {
+    return { ok: true };
+  }
+}
 
 describe('Me (e2e)', () => {
   let app: INestApplication<App>;
@@ -39,6 +50,7 @@ describe('Me (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
+      controllers: [E2eConsentController],
     }).compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
@@ -284,6 +296,79 @@ describe('Me (e2e)', () => {
 
       const res = await api().get('/api/v1/me/goals').set(auth(b)).expect(200);
       expect(res.body.goals).toEqual([]);
+    });
+  });
+
+  describe('/me/consents ve ConsentGuard', () => {
+    const consents = (s: Session) =>
+      api().get('/api/v1/me/consents').set(auth(s));
+    const grant = (s: Session, body: object) =>
+      api().post('/api/v1/me/consents').set(auth(s)).send(body);
+    const revoke = (s: Session, type: string) =>
+      api().delete(`/api/v1/me/consents/${type}`).set(auth(s));
+    const posture = (s: Session) =>
+      api().post('/api/v1/e2e-consent/posture').set(auth(s));
+
+    it('onay vermemiş kullanıcı veri gönderemez (403); verince gönderir; geri alınca yine 403', async () => {
+      const s = await anonymous();
+
+      const denied = await posture(s).expect(403);
+      expect(denied.body.message).toContain('sağlık verisi işleme');
+
+      await grant(s, { type: 'HEALTH_DATA', version: '2026-09' }).expect(201);
+      await posture(s).expect(201);
+
+      await revoke(s, 'HEALTH_DATA').expect(204);
+      await posture(s).expect(403);
+    });
+
+    it('onay geçmişi tutulur; aynı tür+sürüm tekrar verilince yeni kayıt açılmaz', async () => {
+      const s = await register('onay');
+      const first = await grant(s, {
+        type: 'HEALTH_DATA',
+        version: '2026-09',
+      }).expect(201);
+      const same = await grant(s, {
+        type: 'HEALTH_DATA',
+        version: '2026-09',
+      }).expect(201);
+      expect(same.body.grantedAt).toBe(first.body.grantedAt);
+
+      // Yeni sürüm: eskisi geri alınır, yenisi aktif
+      await grant(s, { type: 'HEALTH_DATA', version: '2026-10' }).expect(201);
+      await grant(s, { type: 'RESEARCH_SHARING', version: '2026-09' }).expect(
+        201,
+      );
+
+      const list = await consents(s).expect(200);
+      const rows = list.body.consents as {
+        type: string;
+        version: string;
+        isActive: boolean;
+      }[];
+      expect(rows).toHaveLength(3);
+      expect(
+        rows.filter((c) => c.type === 'HEALTH_DATA' && c.isActive),
+      ).toEqual([expect.objectContaining({ version: '2026-10' })]);
+      expect(
+        rows.find((c) => c.type === 'HEALTH_DATA' && c.version === '2026-09')
+          ?.isActive,
+      ).toBe(false);
+    });
+
+    it('aktif onay yokken geri alma 404; geçersiz tür 400', async () => {
+      const s = await register('onay-yok');
+      await revoke(s, 'HEALTH_DATA').expect(404);
+      await revoke(s, 'MARKETING').expect(400);
+      await grant(s, { type: 'MARKETING', version: '1' }).expect(400);
+      await grant(s, { type: 'HEALTH_DATA', version: 'v 1' }).expect(400);
+    });
+
+    it('bir kullanıcının onayı diğerini etkilemez', async () => {
+      const a = await register('onay-a');
+      const b = await register('onay-b');
+      await grant(a, { type: 'HEALTH_DATA', version: '2026-09' }).expect(201);
+      await posture(b).expect(403);
     });
   });
 });
