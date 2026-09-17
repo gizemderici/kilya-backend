@@ -39,6 +39,8 @@ describe('Auth (e2e)', () => {
   const suffix = randomUUID();
   const emailOf = (name: string) => `${name}-${suffix}@kilya.test`;
   const api = () => request(app.getHttpServer());
+  /** E-postasız kalan anonim kullanıcılar; sonda silinir. */
+  const anonymousIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -62,6 +64,7 @@ describe('Auth (e2e)', () => {
         OR: [
           { email: { endsWith: `-${suffix}@kilya.test` } },
           { googleId: { startsWith: `g-${suffix}` } },
+          { id: { in: anonymousIds } },
         ],
       },
     });
@@ -319,6 +322,117 @@ describe('Auth (e2e)', () => {
 
       expect(res.body.user.id).not.toBe(registered.body.user.id);
       expect(res.body.user.email).toBeNull();
+    });
+  });
+
+  describe('POST /auth/anonymous ve /auth/upgrade', () => {
+    const anonymous = async () => {
+      const res = await api().post('/api/v1/auth/anonymous').expect(201);
+      anonymousIds.push(res.body.user.id);
+      return res.body as {
+        accessToken: string;
+        refreshToken: string;
+        user: { id: string; email: string | null; isAnonymous: boolean };
+      };
+    };
+    const upgrade = (accessToken: string, body: object) =>
+      api()
+        .post('/api/v1/auth/upgrade')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send(body);
+
+    it('anonim kullanıcı açar; e-postasız, isAnonymous=true', async () => {
+      const anon = await anonymous();
+      expect(anon.user).toMatchObject({ email: null, isAnonymous: true });
+      expect(anon.accessToken).toEqual(expect.any(String));
+    });
+
+    it('anonim kullanıcı e-posta ile kalıcı olunca aynı userId korunur', async () => {
+      const anon = await anonymous();
+      const email = emailOf('yukselt');
+
+      // Anonimken "veri" üretmiş gibi: bir oturum kaydı var
+      const before = await prisma.refreshToken.count({
+        where: { userId: anon.user.id },
+      });
+      expect(before).toBe(1);
+
+      const res = await upgrade(anon.accessToken, {
+        email,
+        password: 'Gizli-Parola-123',
+      }).expect(200);
+
+      expect(res.body.user).toEqual({
+        id: anon.user.id,
+        email,
+        isAnonymous: false,
+      });
+
+      // Eski veriler aynı userId altında duruyor; artık parola ile giriş yapılır
+      const login = await api()
+        .post('/api/v1/auth/login')
+        .send({ email, password: 'Gizli-Parola-123' })
+        .expect(200);
+      expect(login.body.user.id).toBe(anon.user.id);
+      expect(
+        await prisma.refreshToken.count({ where: { userId: anon.user.id } }),
+      ).toBeGreaterThanOrEqual(before + 1);
+    });
+
+    it('anonim kullanıcı Google ile kalıcı olur', async () => {
+      const anon = await anonymous();
+      const res = await upgrade(anon.accessToken, {
+        idToken: `ok:g-${suffix}-yukselt:${emailOf('gyukselt')}`,
+      }).expect(200);
+      expect(res.body.user).toEqual({
+        id: anon.user.id,
+        email: emailOf('gyukselt'),
+        isAnonymous: false,
+      });
+    });
+
+    it('e-posta başka hesaptaysa 409, anonim hesap değişmez', async () => {
+      const email = emailOf('dolu');
+      await api()
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'Gizli-Parola-123' })
+        .expect(201);
+      const anon = await anonymous();
+
+      const res = await upgrade(anon.accessToken, {
+        email,
+        password: 'Baska-Parola-123',
+      }).expect(409);
+      expect(res.body.message).toBe('Bu e-posta zaten kayıtlı');
+
+      const still = await prisma.user.findUnique({
+        where: { id: anon.user.id },
+      });
+      expect(still?.isAnonymous).toBe(true);
+    });
+
+    it('kalıcı hesap tekrar upgrade edilemez (400); token olmadan 401', async () => {
+      const anon = await anonymous();
+      const upgraded = await upgrade(anon.accessToken, {
+        email: emailOf('ikinci'),
+        password: 'Gizli-Parola-123',
+      }).expect(200);
+
+      await upgrade(upgraded.body.accessToken, {
+        email: emailOf('ucuncu'),
+        password: 'Gizli-Parola-123',
+      }).expect(400);
+
+      await api()
+        .post('/api/v1/auth/upgrade')
+        .send({ email: emailOf('x'), password: 'Gizli-Parola-123' })
+        .expect(401);
+    });
+
+    it('eksik alanlar 400', async () => {
+      const anon = await anonymous();
+      await upgrade(anon.accessToken, {}).expect(400);
+      await upgrade(anon.accessToken, { email: emailOf('eksik') }).expect(400);
     });
   });
 });

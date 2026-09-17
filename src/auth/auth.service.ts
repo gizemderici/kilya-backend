@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import argon2 from 'argon2';
+import type { Prisma } from '../generated/prisma/client.js';
 import { UsersService } from '../users/users.service.js';
 import type { AuthResponseDto } from './dto/auth-response.dto.js';
 import type { GoogleLoginDto } from './dto/google-login.dto.js';
@@ -12,6 +14,7 @@ import type { LoginDto } from './dto/login.dto.js';
 import type { LogoutDto } from './dto/logout.dto.js';
 import type { RefreshDto } from './dto/refresh.dto.js';
 import type { RegisterDto } from './dto/register.dto.js';
+import type { UpgradeDto } from './dto/upgrade.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { TokenService } from './token.service.js';
 
@@ -96,6 +99,65 @@ export class AuthService {
     });
 
     return this.tokens.issueTokens(user, userAgent);
+  }
+
+  /**
+   * Hesapsız kullanım: e-postasız, parolasız bir kullanıcı açar.
+   * Not (Aşama 12): 90 gün hiç veri göndermemiş anonim hesapları silen
+   * zamanlanmış görev eklenecek.
+   */
+  async createAnonymous(userAgent?: string): Promise<AuthResponseDto> {
+    const user = await this.users.create({ isAnonymous: true });
+    return this.tokens.issueTokens(user, userAgent);
+  }
+
+  /**
+   * Anonim hesabı kalıcı yapar: aynı kullanıcı kaydına e-posta/parola ya da
+   * Google kimliği eklenir; böylece önceki duruş verileri aynı userId'de kalır.
+   */
+  async upgrade(
+    userId: string,
+    dto: UpgradeDto,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException('Kullanıcı bulunamadı');
+    if (!user.isAnonymous) {
+      throw new BadRequestException('Bu hesap zaten kalıcı');
+    }
+
+    const data: Prisma.UserUpdateInput = { isAnonymous: false };
+
+    if (dto.idToken) {
+      const profile = await this.google.verify(dto.idToken);
+      if (await this.users.findByGoogleId(profile.googleId)) {
+        throw new ConflictException(
+          'Bu Google hesabı başka bir kullanıcıya bağlı',
+        );
+      }
+      if (profile.emailVerified && profile.email) {
+        if (await this.users.findByEmail(profile.email)) {
+          throw new ConflictException('Bu e-posta zaten kayıtlı');
+        }
+        data.email = profile.email;
+      }
+      data.googleId = profile.googleId;
+      data.displayName ??= profile.name;
+    } else if (dto.email && dto.password) {
+      if (await this.users.findByEmail(dto.email)) {
+        throw new ConflictException('Bu e-posta zaten kayıtlı');
+      }
+      data.email = dto.email;
+      data.passwordHash = await argon2.hash(dto.password);
+    } else {
+      throw new BadRequestException(
+        'E-posta ve parola ya da Google idToken gönderilmeli',
+      );
+    }
+
+    const upgraded = await this.users.update(user.id, data);
+    // Access token'daki "anon" bilgisi değişti; yeni çift verilir.
+    return this.tokens.issueTokens(upgraded, userAgent);
   }
 
   /** Refresh token ile yeni token çifti alır (rotation). */

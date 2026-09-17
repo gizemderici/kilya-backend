@@ -1,6 +1,8 @@
 import { Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -8,7 +10,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Public } from '../common/decorators/index.js';
+import { CurrentUser, Public } from '../common/decorators/index.js';
 import { RateLimit } from '../common/rate-limit/index.js';
 import { AuthService } from './auth.service.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
@@ -17,6 +19,7 @@ import { LoginDto } from './dto/login.dto.js';
 import { LogoutDto } from './dto/logout.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { UpgradeDto } from './dto/upgrade.dto.js';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -67,6 +70,37 @@ export class AuthController {
     @Headers('user-agent') userAgent?: string,
   ): Promise<AuthResponseDto> {
     return this.auth.loginWithGoogle(dto, userAgent);
+  }
+
+  /** Hesapsız devam et: anonim kullanıcı açar, token çifti döner. */
+  @Public()
+  @Post('anonymous')
+  @HttpCode(201)
+  @ApiCreatedResponse({ type: AuthResponseDto })
+  anonymous(
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    return this.auth.createAnonymous(userAgent);
+  }
+
+  /**
+   * Anonim hesabı kalıcı yapar (e-posta + parola ya da Google idToken).
+   * Aynı kullanıcı kaydı güncellenir; önceki veriler korunur.
+   */
+  @Post('upgrade')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiBadRequestResponse({ description: 'Hesap zaten kalıcı ya da eksik alan' })
+  @ApiConflictResponse({
+    description: 'E-posta ya da Google hesabı başka bir kullanıcıda',
+  })
+  upgrade(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpgradeDto,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    return this.auth.upgrade(userId, dto, userAgent);
   }
 
   /**

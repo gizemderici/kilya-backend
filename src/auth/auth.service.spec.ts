@@ -1,4 +1,8 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import argon2 from 'argon2';
 import type { User } from '../generated/prisma/client.js';
 import type { UsersService } from '../users/users.service.js';
@@ -12,6 +16,9 @@ import { fakeUser } from './token.service.spec.js';
 
 function setup() {
   const users = {
+    findById: vi.fn<() => Promise<User | null>>(async () =>
+      fakeUser({ id: 'anon-1', email: null, isAnonymous: true }),
+    ),
     findByEmail: vi.fn<() => Promise<User | null>>(async () => null),
     findByGoogleId: vi.fn<() => Promise<User | null>>(async () => null),
     create: vi.fn(async (data) => fakeUser({ id: 'new-user', ...data })),
@@ -189,6 +196,86 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
       expect(users.create).not.toHaveBeenCalled();
+    });
+  });
+
+  it('createAnonymous isAnonymous=true kullanıcı açar', async () => {
+    const { service, users, tokens } = setup();
+    await service.createAnonymous('ua');
+    expect(users.create).toHaveBeenCalledWith({ isAnonymous: true });
+    expect(tokens.issueTokens).toHaveBeenCalledWith(
+      expect.objectContaining({ isAnonymous: true }),
+      'ua',
+    );
+  });
+
+  describe('upgrade', () => {
+    it('e-posta/parola ile aynı kaydı günceller, yeni token verir', async () => {
+      const { service, users, tokens } = setup();
+
+      await service.upgrade(
+        'anon-1',
+        { email: 'a@b.com', password: 'Gizli-Parola-123' },
+        'ua',
+      );
+
+      const [id, data] = users.update.mock.calls[0];
+      expect(id).toBe('anon-1');
+      expect(data.email).toBe('a@b.com');
+      expect(data.isAnonymous).toBe(false);
+      await expect(
+        argon2.verify(data.passwordHash, 'Gizli-Parola-123'),
+      ).resolves.toBe(true);
+      expect(users.create).not.toHaveBeenCalled();
+      expect(tokens.issueTokens).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'anon-1', isAnonymous: false }),
+        'ua',
+      );
+    });
+
+    it('Google ile aynı kaydı günceller', async () => {
+      const { service, users } = setup();
+      await service.upgrade('anon-1', {
+        idToken: 'google-id-token-xxxxxxxxxx',
+      });
+      expect(users.update).toHaveBeenCalledWith('anon-1', {
+        isAnonymous: false,
+        googleId: 'g-123',
+        email: 'g@gmail.com',
+        displayName: 'Gizem',
+      });
+    });
+
+    it('e-posta başka hesaptaysa 409', async () => {
+      const { service, users } = setup();
+      users.findByEmail.mockResolvedValueOnce(fakeUser({ id: 'other' }));
+      await expect(
+        service.upgrade('anon-1', {
+          email: 'a@b.com',
+          password: 'Gizli-Parola-123',
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(users.update).not.toHaveBeenCalled();
+    });
+
+    it('Google hesabı başka kullanıcıya bağlıysa 409', async () => {
+      const { service, users } = setup();
+      users.findByGoogleId.mockResolvedValueOnce(fakeUser({ id: 'other' }));
+      await expect(
+        service.upgrade('anon-1', { idToken: 'google-id-token-xxxxxxxxxx' }),
+      ).rejects.toThrow(ConflictException);
+      expect(users.update).not.toHaveBeenCalled();
+    });
+
+    it('hesap zaten kalıcıysa 400', async () => {
+      const { service, users } = setup();
+      users.findById.mockResolvedValueOnce(fakeUser({ isAnonymous: false }));
+      await expect(
+        service.upgrade('user-1', {
+          email: 'a@b.com',
+          password: 'Gizli-Parola-123',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
